@@ -82,6 +82,32 @@ QByteArray MainWindow::getMd5Checksumm(const QString &filename)
     return result;
 }
 
+QString MainWindow::createSaveFilename(const QString &folderPath, EXPORT_MODES exportMode)
+{
+    int max = 0;
+    QString extention = exportMode == TXT_EXPORT ? QStringLiteral(".txt")
+                                                 : QStringLiteral(".xlsx");
+    QRegExp rex(QStringLiteral("Отчет\\s\\d+\\") + extention);
+    const QFileInfoList fileList = QDir(folderPath).entryInfoList(QStringList(), QDir::Files);
+    for (const auto &info : fileList)
+    {
+        if (info.isHidden())
+        {
+            continue;
+        }
+        if (!rex.exactMatch(info.fileName()))
+        {
+            continue;
+        }
+        int number = (info.fileName().remove(0, 6).remove(extention)).toInt();
+        if (number > max)
+        {
+            max = number;
+        }
+    }
+    return QStringLiteral("Отчет ") + QString::number(++max) + extention;
+}
+
 void MainWindow::slotBrowse()
 {
     auto currentPath = ui->path_lineEdit->text();
@@ -150,8 +176,9 @@ void MainWindow::slotWriteTxt()
         return;
     }
 
+    QString saveName = ui->path_lineEdit->text() + QDir::separator() + createSaveFilename(ui->path_lineEdit->text(), TXT_EXPORT);
     const auto savePath = QFileDialog::getSaveFileName(this, QStringLiteral("Сохранение")
-                                                       , ui->path_lineEdit->text()
+                                                       , saveName
                                                        , QStringLiteral("*.txt"));
     qDebug() << savePath;
     if (savePath.isEmpty())
@@ -182,8 +209,9 @@ void MainWindow::slotWriteXlsx()
         return;
     }
 
+    QString saveName = ui->path_lineEdit->text() + QDir::separator() + createSaveFilename(ui->path_lineEdit->text(), XLSX_EXPORT);
     const auto savePath = QFileDialog::getSaveFileName(this, QStringLiteral("Сохранение")
-                                                       , ui->path_lineEdit->text()
+                                                       , saveName
                                                        , QStringLiteral("*.xlsx"));
     if (savePath.isEmpty())
     {

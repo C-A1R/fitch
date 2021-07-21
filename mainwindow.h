@@ -19,11 +19,17 @@ class MainWindow : public QMainWindow
         COL_MAX
     };
 
-    enum ROlES
+    enum ROLES
     {
         ROLE_DATE_TIME = Qt::UserRole,
         ROLE_MD5,
         ROLE_FILE_SIZE
+    };
+
+    enum EXPORT_MODES
+    {
+        TXT_EXPORT,
+        XLSX_EXPORT
     };
 
     Ui::MainWindow *ui;
@@ -37,6 +43,7 @@ public:
 private:
     void setTxtXlsxEnabled();
     QByteArray getMd5Checksumm(const QString &filename);
+    QString createSaveFilename(const QString &folderPath, EXPORT_MODES exportMode);
 
 private slots:
     void slotBrowse();
