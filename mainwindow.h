@@ -43,7 +43,7 @@ public:
 private:
     void setTxtXlsxEnabled();
     QByteArray getMd5Checksumm(const QString &filename);
-    QString createSaveFilename(const QString &folderPath, EXPORT_MODES exportMode);
+    QString createSaveFilename(const QString &folderPath, EXPORT_MODES mode);
 
 private slots:
     void slotBrowse();
