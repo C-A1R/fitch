@@ -82,11 +82,11 @@ QByteArray MainWindow::getMd5Checksumm(const QString &filename)
     return result;
 }
 
-QString MainWindow::createSaveFilename(const QString &folderPath, EXPORT_MODES exportMode)
+QString MainWindow::createSaveFilename(const QString &folderPath, EXPORT_MODES mode)
 {
     int max = 0;
-    QString extention = exportMode == TXT_EXPORT ? QStringLiteral(".txt")
-                                                 : QStringLiteral(".xlsx");
+    QString extention = mode == TXT_EXPORT ? QStringLiteral(".txt")
+                                           : QStringLiteral(".xlsx");
     QRegExp rex(QStringLiteral("Отчет\\s\\d+\\") + extention);
     const QFileInfoList fileList = QDir(folderPath).entryInfoList(QStringList(), QDir::Files);
     for (const auto &info : fileList)
@@ -226,7 +226,7 @@ void MainWindow::slotWriteXlsx()
     QXlsx::Format txtFormat;
     txtFormat.setNumberFormatIndex(49);
     QXlsx::Format dateTimeFormat;
-    dateTimeFormat.setNumberFormat("dd.MM.yyyy hh:mm:ss");
+    dateTimeFormat.setNumberFormat(QStringLiteral("dd.MM.yyyy hh:mm:ss"));
     for (int i = 0; i < ui->tableWidget->rowCount(); ++i)
     {
         const auto xlsxRow = i + 1;
