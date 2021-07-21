@@ -129,11 +129,13 @@ void MainWindow::slotScan()
             ui->tableWidget->setItem(row, COL_NAME, item);
         }
         {
+            QDateTime dateTime(info.lastModified().date(), info.lastModified().time());
             auto item = new QTableWidgetItem();
             item->setFlags(item->flags() &~Qt::ItemIsEditable);
             item->setTextAlignment(Qt::AlignCenter);
-            item->setText(info.lastModified().date().toString(QStringLiteral("dd.MM.yyyy"))
-                          + QStringLiteral("  ") + info.lastModified().time().toString(QStringLiteral("hh:mm:ss")));
+            item->setData(ROLE_DATE_TIME, dateTime);
+            item->setText(dateTime.date().toString(QStringLiteral("dd.MM.yyyy"))
+                          + QStringLiteral("  ") + dateTime.time().toString(QStringLiteral("hh:mm:ss")));
             ui->tableWidget->setItem(row, COL_DATE_TIME, item);
         }
     }
@@ -195,11 +197,13 @@ void MainWindow::slotWriteXlsx()
     xlsx.setColumnWidth(4, 15.0);
     QXlsx::Format txtFormat;
     txtFormat.setNumberFormatIndex(49);
+    QXlsx::Format dateTimeFormat;
+    dateTimeFormat.setNumberFormat("dd.MM.yyyy hh:mm:ss");
     for (int i = 0; i < ui->tableWidget->rowCount(); ++i)
     {
         const auto xlsxRow = i + 1;
         xlsx.write(QStringLiteral("A%1").arg(xlsxRow), ui->tableWidget->item(i, COL_NAME)->text(), txtFormat);
-        xlsx.write(QStringLiteral("B%1").arg(xlsxRow), ui->tableWidget->item(i, COL_DATE_TIME)->text(), txtFormat);
+        xlsx.write(QStringLiteral("B%1").arg(xlsxRow), ui->tableWidget->item(i, COL_DATE_TIME)->data(ROLE_DATE_TIME).toDateTime(), dateTimeFormat);
         xlsx.write(QStringLiteral("C%1").arg(xlsxRow), ui->tableWidget->item(i, COL_NAME)->data(ROLE_MD5).toString(), txtFormat);
         xlsx.write(QStringLiteral("D%1").arg(xlsxRow), ui->tableWidget->item(i, COL_NAME)->data(ROLE_FILE_SIZE).value<qint64>(), txtFormat);
     }

@@ -21,7 +21,8 @@ class MainWindow : public QMainWindow
 
     enum ROlES
     {
-        ROLE_MD5 = Qt::UserRole,
+        ROLE_DATE_TIME = Qt::UserRole,
+        ROLE_MD5,
         ROLE_FILE_SIZE
     };
 
