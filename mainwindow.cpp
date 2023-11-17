@@ -1,15 +1,15 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+#include "xlsxdocument.h"
+
 #include <QFileDialog>
 #include <QDebug>
 #include <QDateTime>
 #include <QMessageBox>
 #include <QFile>
 #include <QCryptographicHash>
-
-#include "xlsxdocument.h"
-
+#include <QTimer>
 
 #define SETTINGS_LAST_PATH  "last_path"
 
@@ -82,12 +82,18 @@ QByteArray MainWindow::getMd5Checksumm(const QString &filename)
     return result;
 }
 
-QString MainWindow::createSaveFilename(const QString &folderPath, EXPORT_MODES mode)
+QString MainWindow::createSavePath(const EXPORT_MODES mode)
 {
+    const QString &folderPath = ui->path_lineEdit->text();
+    if (folderPath.isEmpty())
+    {
+        return QString();
+    }
+
     int max = 0;
-    QString extention = mode == TXT_EXPORT ? QStringLiteral(".txt")
-                                           : QStringLiteral(".xlsx");
-    QRegExp rex(QStringLiteral("Отчет\\s\\d+\\") + extention);
+    const QString extention = mode == TXT_EXPORT ? QStringLiteral(".txt")
+                                                 : QStringLiteral(".xlsx");
+    const QRegExp rex(QStringLiteral("Отчет\\s\\d+\\") + extention);
     const QFileInfoList fileList = QDir(folderPath).entryInfoList(QStringList(), QDir::Files);
     for (const auto &info : fileList)
     {
@@ -99,13 +105,24 @@ QString MainWindow::createSaveFilename(const QString &folderPath, EXPORT_MODES m
         {
             continue;
         }
-        int number = (info.fileName().remove(0, 6).remove(extention)).toInt();
+        const int number = (info.fileName().remove(0, 6).remove(extention)).toInt();
         if (number > max)
         {
             max = number;
         }
     }
-    return QStringLiteral("Отчет ") + QString::number(++max) + extention;
+    return folderPath + '/' + QStringLiteral("Отчет ") + QString::number(++max) + extention;
+}
+
+void MainWindow::showSuccessMessage(const QString &savePath)
+{
+    QMessageBox msgBox(this);
+    msgBox.setIcon(QMessageBox::Information);
+    msgBox.setWindowTitle(QStringLiteral("Экспорт"));
+    msgBox.setText(QStringLiteral("Сохранено в %1").arg(savePath));
+    msgBox.setStandardButtons(QMessageBox::NoButton);
+    QTimer::singleShot(1000, &msgBox, &QMessageBox::accept);
+    msgBox.exec();
 }
 
 void MainWindow::slotBrowse()
@@ -124,7 +141,7 @@ void MainWindow::slotBrowse()
 
 void MainWindow::slotScan()
 {
-    auto folderPath = ui->path_lineEdit->text();
+    const QString &folderPath = ui->path_lineEdit->text();
     if (folderPath.isEmpty())
     {
         return;
@@ -141,7 +158,7 @@ void MainWindow::slotScan()
         {
             continue;
         }
-        int row = ui->tableWidget->rowCount();
+        const int row = ui->tableWidget->rowCount();
         ui->tableWidget->insertRow(row);
         {
             auto item = new QTableWidgetItem();
@@ -176,11 +193,7 @@ void MainWindow::slotWriteTxt()
         return;
     }
 
-    QString saveName = ui->path_lineEdit->text() + QDir::separator() + createSaveFilename(ui->path_lineEdit->text(), TXT_EXPORT);
-    const auto savePath = QFileDialog::getSaveFileName(this, QStringLiteral("Сохранение")
-                                                       , saveName
-                                                       , QStringLiteral("*.txt"));
-    qDebug() << savePath;
+    const QString savePath = createSavePath(TXT_EXPORT);
     if (savePath.isEmpty())
     {
         return;
@@ -198,8 +211,7 @@ void MainWindow::slotWriteTxt()
         stream << ui->tableWidget->item(i, COL_DATE_TIME)->text() << QStringLiteral("\r\n");
     }
     file.close();
-    QMessageBox::information(this, QStringLiteral("Успех")
-                             , QStringLiteral("Запись в файл завершена успешно"));
+    showSuccessMessage(savePath);
 }
 
 void MainWindow::slotWriteXlsx()
@@ -209,10 +221,7 @@ void MainWindow::slotWriteXlsx()
         return;
     }
 
-    QString saveName = ui->path_lineEdit->text() + QDir::separator() + createSaveFilename(ui->path_lineEdit->text(), XLSX_EXPORT);
-    const auto savePath = QFileDialog::getSaveFileName(this, QStringLiteral("Сохранение")
-                                                       , saveName
-                                                       , QStringLiteral("*.xlsx"));
+    const QString savePath = createSavePath(XLSX_EXPORT);
     if (savePath.isEmpty())
     {
         return;
@@ -235,10 +244,11 @@ void MainWindow::slotWriteXlsx()
         xlsx.write(QStringLiteral("C%1").arg(xlsxRow), ui->tableWidget->item(i, COL_NAME)->data(ROLE_MD5).toString(), txtFormat);
         xlsx.write(QStringLiteral("D%1").arg(xlsxRow), ui->tableWidget->item(i, COL_NAME)->data(ROLE_FILE_SIZE).value<qint64>(), txtFormat);
     }
-    xlsx.saveAs(savePath);
-
-    QMessageBox::information(this, QStringLiteral("Успех")
-                             , QStringLiteral("Запись в файл завершена успешно"));
+    if (!xlsx.saveAs(savePath))
+    {
+        QMessageBox::critical(this, QStringLiteral("Ошибка"), QStringLiteral("Не удалось сохранить в %1").arg(savePath));
+    }
+    showSuccessMessage(savePath);
 }
 
 void MainWindow::slotPathChanged()

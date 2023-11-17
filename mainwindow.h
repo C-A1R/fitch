@@ -8,6 +8,8 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
+class QDir;
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -43,7 +45,8 @@ public:
 private:
     void setTxtXlsxEnabled();
     QByteArray getMd5Checksumm(const QString &filename);
-    QString createSaveFilename(const QString &folderPath, EXPORT_MODES mode);
+    QString createSavePath(const EXPORT_MODES mode);
+    void showSuccessMessage(const QString &savePath);
 
 private slots:
     void slotBrowse();
