@@ -1,6 +1,8 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "ChecksumCalculator.h"
+
 #include <QMainWindow>
 #include <QSettings>
 
@@ -24,7 +26,7 @@ class MainWindow : public QMainWindow
     enum ROLES
     {
         ROLE_DATE_TIME = Qt::UserRole,
-        ROLE_MD5,
+        ROLE_CHECKSUM,
         ROLE_FILE_SIZE
     };
 
@@ -37,6 +39,7 @@ class MainWindow : public QMainWindow
     Ui::MainWindow *ui;
     const QString settingsFilename = QStringLiteral("settings.conf");
     QScopedPointer<QSettings> settings {new QSettings(QStringLiteral("settings.conf"), QSettings::IniFormat)};
+    QString lastScannedChecksumName;
 
 public:
     MainWindow(QWidget *parent = nullptr);
@@ -44,9 +47,9 @@ public:
 
 private:
     void setTxtXlsxEnabled();
-    QByteArray getMd5Checksumm(const QString &filename);
     QString createSavePath(const EXPORT_MODES mode);
     void showSuccessMessage(const QString &savePath);
+    static QSharedPointer<ChecksumCalculator> makeChecksumCalculator(const ChecksumCalculator::CHECKSUM_TYPES type);
 
 private slots:
     void slotBrowse();

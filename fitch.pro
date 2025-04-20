@@ -15,6 +15,7 @@ SOURCES += \
     mainwindow.cpp
 
 HEADERS += \
+    ChecksumCalculator.h \
     mainwindow.h
 
 FORMS += \

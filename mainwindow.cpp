@@ -4,14 +4,14 @@
 #include "xlsxdocument.h"
 
 #include <QFileDialog>
-#include <QDebug>
 #include <QDateTime>
 #include <QMessageBox>
 #include <QFile>
-#include <QCryptographicHash>
 #include <QTimer>
+#include <QTextStream>
 
 #define SETTINGS_LAST_PATH  "last_path"
+#define SETTINGS_CHECKSUM_TYPE  "checksum_type"
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -36,6 +36,15 @@ MainWindow::MainWindow(QWidget *parent)
     ui->tableWidget->setColumnWidth(COL_DATE_TIME, 150);
     ui->tableWidget->verticalHeader()->setVisible(false);
     ui->tableWidget->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+
+    ui->checksum_comboBox->addItem("CRC32", static_cast<uint>(ChecksumCalculator::CHECKSUM_TYPES::CRC32));
+    ui->checksum_comboBox->addItem("MD5", static_cast<uint>(ChecksumCalculator::CHECKSUM_TYPES::MD5));
+    ui->checksum_comboBox->addItem("SHA-1", static_cast<uint>(ChecksumCalculator::CHECKSUM_TYPES::SHA_1));
+    const uint last_checksum_type = settings->value(SETTINGS_CHECKSUM_TYPE, 0).toInt();
+    if (last_checksum_type < static_cast<uint>(ChecksumCalculator::CHECKSUM_TYPES::MAX))
+        ui->checksum_comboBox->setCurrentIndex(last_checksum_type);
+    else
+        ui->checksum_comboBox->setCurrentIndex(0);
 
     connect(ui->browse_pushButton, &QPushButton::clicked, this, &MainWindow::slotBrowse);
     connect(ui->scan_toolButton, &QToolButton::clicked, this, &MainWindow::slotScan);
@@ -62,24 +71,6 @@ void MainWindow::setTxtXlsxEnabled()
 {
     ui->toTxt_toolButton->setEnabled(ui->tableWidget->rowCount() > 0);
     ui->toXlsx_toolButton->setEnabled(ui->tableWidget->rowCount() > 0);
-}
-
-QByteArray MainWindow::getMd5Checksumm(const QString &filename)
-{
-    auto result = QByteArray();
-    QFile f(filename);
-    if (!f.open(QFile::ReadOnly))
-    {
-        return result;
-    }
-
-    QCryptographicHash hash(QCryptographicHash::Md5);
-    if (hash.addData(&f))
-    {
-        result = hash.result();
-    }
-    f.close();
-    return result;
 }
 
 QString MainWindow::createSavePath(const EXPORT_MODES mode)
@@ -125,6 +116,17 @@ void MainWindow::showSuccessMessage(const QString &savePath)
     msgBox.exec();
 }
 
+QSharedPointer<ChecksumCalculator> MainWindow::makeChecksumCalculator(const ChecksumCalculator::CHECKSUM_TYPES type)
+{
+    if (type == ChecksumCalculator::CHECKSUM_TYPES::CRC32)
+        return QSharedPointer<CRC32_ChecksumCalculator>(new CRC32_ChecksumCalculator);
+    if (type == ChecksumCalculator::CHECKSUM_TYPES::MD5)
+        return QSharedPointer<MD5_ChecksumCalculator>(new MD5_ChecksumCalculator);
+    if (type == ChecksumCalculator::CHECKSUM_TYPES::SHA_1)
+        return QSharedPointer<SHA1_ChecksumCalculator>(new SHA1_ChecksumCalculator);
+    return nullptr;
+}
+
 void MainWindow::slotBrowse()
 {
     auto currentPath = ui->path_lineEdit->text();
@@ -151,6 +153,17 @@ void MainWindow::slotScan()
     setCursor(Qt::WaitCursor);
     ui->tableWidget->clearContents();
     ui->tableWidget->setRowCount(0);
+
+    const int checksum_type = ui->checksum_comboBox->currentData().toInt();
+    settings->setValue(SETTINGS_CHECKSUM_TYPE, checksum_type);
+    auto checksumCalculator = makeChecksumCalculator(static_cast<ChecksumCalculator::CHECKSUM_TYPES>(checksum_type));
+    if (!checksumCalculator)
+    {
+        QMessageBox::critical(this, QStringLiteral("Ошибка"), QStringLiteral("Проблема с типом чексуммы"));
+        return;
+    }
+    lastScannedChecksumName = checksumCalculator->name();
+
     const QFileInfoList fileList = QDir(folderPath).entryInfoList(QStringList(), QDir::Files);
     for (const auto &info : fileList)
     {
@@ -164,9 +177,7 @@ void MainWindow::slotScan()
             auto item = new QTableWidgetItem();
             item->setFlags(item->flags() &~Qt::ItemIsEditable);
             item->setText(info.fileName());
-
-            QByteArray data = getMd5Checksumm(info.filePath()).toHex();
-            item->setData(ROLE_MD5, QString::fromStdString(data.toStdString()));
+            item->setData(ROLE_CHECKSUM, checksumCalculator->calcChecksum(info.filePath()));
             item->setData(ROLE_FILE_SIZE, info.size());
 
             ui->tableWidget->setItem(row, COL_NAME, item);
@@ -230,23 +241,37 @@ void MainWindow::slotWriteXlsx()
     QXlsx::Document xlsx;
     xlsx.setColumnWidth(1, 80.0);
     xlsx.setColumnWidth(2, 20.0);
-    xlsx.setColumnWidth(3, 35.0);
+    xlsx.setColumnWidth(3, 40.0);
     xlsx.setColumnWidth(4, 15.0);
+
+    {
+        QXlsx::Format headerFormat;
+        headerFormat.setNumberFormatIndex(49);
+        headerFormat.setFontBold(true);
+        headerFormat.setHorizontalAlignment(QXlsx::Format::HorizontalAlignment::AlignHCenter);
+        xlsx.write(QStringLiteral("A1"), QStringLiteral("Filename"), headerFormat);
+        xlsx.write(QStringLiteral("B1"), QStringLiteral("Last edit date time"), headerFormat);
+        xlsx.write(QStringLiteral("C1"), QStringLiteral("Checksum (%1)").arg(lastScannedChecksumName), headerFormat);
+        xlsx.write(QStringLiteral("D1"), QStringLiteral("File size"), headerFormat);
+    }
+
     QXlsx::Format txtFormat;
     txtFormat.setNumberFormatIndex(49);
     QXlsx::Format dateTimeFormat;
     dateTimeFormat.setNumberFormat(QStringLiteral("dd.MM.yyyy hh:mm:ss"));
     for (int i = 0; i < ui->tableWidget->rowCount(); ++i)
     {
-        const auto xlsxRow = i + 1;
-        xlsx.write(QStringLiteral("A%1").arg(xlsxRow), ui->tableWidget->item(i, COL_NAME)->text(), txtFormat);
-        xlsx.write(QStringLiteral("B%1").arg(xlsxRow), ui->tableWidget->item(i, COL_DATE_TIME)->data(ROLE_DATE_TIME).toDateTime(), dateTimeFormat);
-        xlsx.write(QStringLiteral("C%1").arg(xlsxRow), ui->tableWidget->item(i, COL_NAME)->data(ROLE_MD5).toString(), txtFormat);
-        xlsx.write(QStringLiteral("D%1").arg(xlsxRow), ui->tableWidget->item(i, COL_NAME)->data(ROLE_FILE_SIZE).value<qint64>(), txtFormat);
+        const auto row = i + 2;
+        xlsx.write(QStringLiteral("A%1").arg(row), ui->tableWidget->item(i, COL_NAME)->text(), txtFormat);
+        xlsx.write(QStringLiteral("B%1").arg(row), ui->tableWidget->item(i, COL_DATE_TIME)->data(ROLE_DATE_TIME).toDateTime(), dateTimeFormat);
+        xlsx.write(QStringLiteral("C%1").arg(row), ui->tableWidget->item(i, COL_NAME)->data(ROLE_CHECKSUM).toString(), txtFormat);
+        xlsx.write(QStringLiteral("D%1").arg(row), ui->tableWidget->item(i, COL_NAME)->data(ROLE_FILE_SIZE).value<qint64>(), txtFormat);
     }
+
     if (!xlsx.saveAs(savePath))
     {
         QMessageBox::critical(this, QStringLiteral("Ошибка"), QStringLiteral("Не удалось сохранить в %1").arg(savePath));
+        return;
     }
     showSuccessMessage(savePath);
 }
