@@ -20,6 +20,7 @@ public:
     ChecksumCalculator() = default;
     virtual ~ChecksumCalculator() = default;
     virtual QString name() const = 0;
+    virtual std::size_t maxLen() const = 0;
     virtual QString calcChecksum(const QString &filePath) const = 0;
 };
 
@@ -99,6 +100,7 @@ public:
 
 private:
     QString name() const override { return "CRC32"; }
+    std::size_t maxLen() const override { return 20; }
 
     QString calcChecksum(const QString &filePath) const override
     {
@@ -130,6 +132,7 @@ class MD5_ChecksumCalculator : public ChecksumCalculator
 {
 public:
     MD5_ChecksumCalculator() = default;
+    std::size_t maxLen() const override { return 40; }
 
 private:
     QString name() const override { return "MD5"; }
@@ -158,6 +161,7 @@ class SHA1_ChecksumCalculator : public ChecksumCalculator
 {
 public:
     SHA1_ChecksumCalculator() = default;
+    std::size_t maxLen() const override { return 45; }
 
 private:
     QString name() const override { return "SHA-1"; }

@@ -9,9 +9,15 @@
 #include <QFile>
 #include <QTimer>
 #include <QTextStream>
+#include <QTextCodec>
+#include <QDesktopServices>
 
-#define SETTINGS_LAST_PATH  "last_path"
+#define SETTINGS_LAST_PATH      "last_path"
 #define SETTINGS_CHECKSUM_TYPE  "checksum_type"
+#define SETTINGS_OPEN_REPORT    "open_report"
+
+#define MAJOR_VERSION 1
+#define MINOR_VERSION 1
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -19,6 +25,8 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    setWindowTitle(QStringLiteral("%1 %2.%3").arg(windowTitle()).arg(MAJOR_VERSION).arg(MINOR_VERSION));
+
     ui->scan_toolButton->setIcon(QIcon(QStringLiteral(":/img/img/start.svg")));
     ui->scan_toolButton->setToolTip(QStringLiteral("Сканировать"));
     ui->scan_toolButton->setStyleSheet(QStringLiteral("border: 0;"));
@@ -45,12 +53,15 @@ MainWindow::MainWindow(QWidget *parent)
         ui->checksum_comboBox->setCurrentIndex(last_checksum_type);
     else
         ui->checksum_comboBox->setCurrentIndex(0);
+    const bool open_report = settings->value(SETTINGS_OPEN_REPORT, 0).toBool();
+    ui->open_checkBox->setCheckState(open_report ? Qt::Checked : Qt::Unchecked);
 
     connect(ui->browse_pushButton, &QPushButton::clicked, this, &MainWindow::slotBrowse);
     connect(ui->scan_toolButton, &QToolButton::clicked, this, &MainWindow::slotScan);
     connect(ui->toTxt_toolButton, &QToolButton::clicked, this, &MainWindow::slotWriteTxt);
     connect(ui->toXlsx_toolButton, &QToolButton::clicked, this, &MainWindow::slotWriteXlsx);
     connect(ui->path_lineEdit, &QLineEdit::textChanged, this, &MainWindow::slotPathChanged);
+    connect(this, &MainWindow::signalReportFileWritten, this, &MainWindow::slotReportFileWritten);
 
     auto lastPath = settings->value(SETTINGS_LAST_PATH, "").toString();
     if (lastPath.isEmpty())
@@ -64,6 +75,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    settings->setValue(SETTINGS_OPEN_REPORT, ui->open_checkBox->checkState() == Qt::Checked ? 1 : 0);
     delete ui;
 }
 
@@ -156,13 +168,12 @@ void MainWindow::slotScan()
 
     const int checksum_type = ui->checksum_comboBox->currentData().toInt();
     settings->setValue(SETTINGS_CHECKSUM_TYPE, checksum_type);
-    auto checksumCalculator = makeChecksumCalculator(static_cast<ChecksumCalculator::CHECKSUM_TYPES>(checksum_type));
+    checksumCalculator = makeChecksumCalculator(static_cast<ChecksumCalculator::CHECKSUM_TYPES>(checksum_type));
     if (!checksumCalculator)
     {
-        QMessageBox::critical(this, QStringLiteral("Ошибка"), QStringLiteral("Проблема с типом чексуммы"));
+        QMessageBox::critical(this, QStringLiteral("Ошибка"), QStringLiteral("Проблема с расчетом чексуммы"));
         return;
     }
-    lastScannedChecksumName = checksumCalculator->name();
 
     const QFileInfoList fileList = QDir(folderPath).entryInfoList(QStringList(), QDir::Files);
     for (const auto &info : fileList)
@@ -216,13 +227,28 @@ void MainWindow::slotWriteTxt()
         return;
     }
 
+    const std::size_t wName = 50;
+    const std::size_t wDate = 25;
+    const std::size_t wChecksum = checksumCalculator->maxLen();
+    const std::size_t wSize = 15;
     QTextStream stream(&file);
+    stream << Qt::left  << qSetFieldWidth(wName)     << QStringLiteral("Filename")
+                        << qSetFieldWidth(wDate)     << QStringLiteral("Last edit date time")
+                        << qSetFieldWidth(wChecksum) << QStringLiteral("Checksum (%1)").arg(checksumCalculator->name())
+           << Qt::right << qSetFieldWidth(wSize)     << QStringLiteral("File size")
+                        << qSetFieldWidth(0)         << Qt::endl;
     for (int i = 0; i < ui->tableWidget->rowCount(); ++i)
     {
-        stream << ui->tableWidget->item(i, COL_DATE_TIME)->text() << QStringLiteral("\r\n");
+        const QString filename = QString::fromLocal8Bit(ui->tableWidget->item(i, COL_NAME)->data(Qt::DisplayRole).toByteArray());
+        stream << Qt::left  << qSetFieldWidth(wName)     << filename
+                            << qSetFieldWidth(wDate)     << ui->tableWidget->item(i, COL_DATE_TIME)->text()
+                            << qSetFieldWidth(wChecksum) << ui->tableWidget->item(i, COL_NAME)->data(ROLE_CHECKSUM).toString()
+               << Qt::right << qSetFieldWidth(wSize)     << ui->tableWidget->item(i, COL_NAME)->data(ROLE_FILE_SIZE).value<qint64>()
+                            << qSetFieldWidth(0)         << Qt::endl;
     }
     file.close();
-    showSuccessMessage(savePath);
+
+    emit signalReportFileWritten(savePath);
 }
 
 void MainWindow::slotWriteXlsx()
@@ -251,7 +277,7 @@ void MainWindow::slotWriteXlsx()
         headerFormat.setHorizontalAlignment(QXlsx::Format::HorizontalAlignment::AlignHCenter);
         xlsx.write(QStringLiteral("A1"), QStringLiteral("Filename"), headerFormat);
         xlsx.write(QStringLiteral("B1"), QStringLiteral("Last edit date time"), headerFormat);
-        xlsx.write(QStringLiteral("C1"), QStringLiteral("Checksum (%1)").arg(lastScannedChecksumName), headerFormat);
+        xlsx.write(QStringLiteral("C1"), QStringLiteral("Checksum (%1)").arg(checksumCalculator->name()), headerFormat);
         xlsx.write(QStringLiteral("D1"), QStringLiteral("File size"), headerFormat);
     }
 
@@ -273,12 +299,20 @@ void MainWindow::slotWriteXlsx()
         QMessageBox::critical(this, QStringLiteral("Ошибка"), QStringLiteral("Не удалось сохранить в %1").arg(savePath));
         return;
     }
-    showSuccessMessage(savePath);
+
+    emit signalReportFileWritten(savePath);
 }
 
 void MainWindow::slotPathChanged()
 {
     ui->scan_toolButton->setEnabled(!ui->path_lineEdit->text().isEmpty());
+}
+
+void MainWindow::slotReportFileWritten(const QString &savePath)
+{
+    showSuccessMessage(savePath);
+    if (ui->open_checkBox->checkState() == Qt::Checked)
+        QDesktopServices::openUrl(QUrl::fromLocalFile(savePath));
 }
 
 

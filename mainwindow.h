@@ -39,7 +39,7 @@ class MainWindow : public QMainWindow
     Ui::MainWindow *ui;
     const QString settingsFilename = QStringLiteral("settings.conf");
     QScopedPointer<QSettings> settings {new QSettings(QStringLiteral("settings.conf"), QSettings::IniFormat)};
-    QString lastScannedChecksumName;
+    QSharedPointer<ChecksumCalculator> checksumCalculator;
 
 public:
     MainWindow(QWidget *parent = nullptr);
@@ -57,5 +57,9 @@ private slots:
     void slotWriteTxt();
     void slotWriteXlsx();
     void slotPathChanged();
+    void slotReportFileWritten(const QString &savePath);
+
+signals:
+    void signalReportFileWritten(const QString &savePath);
 };
 #endif // MAINWINDOW_H

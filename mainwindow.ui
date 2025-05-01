@@ -31,6 +31,13 @@
        <widget class="QComboBox" name="checksum_comboBox"/>
       </item>
       <item>
+       <widget class="QCheckBox" name="open_checkBox">
+        <property name="text">
+         <string>открыть отчет</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
