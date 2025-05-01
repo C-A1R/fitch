@@ -9,7 +9,6 @@
 #include <QFile>
 #include <QTimer>
 #include <QTextStream>
-#include <QTextCodec>
 #include <QDesktopServices>
 
 #define SETTINGS_LAST_PATH      "last_path"
