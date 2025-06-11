@@ -27,6 +27,7 @@ public:
 
 class CRC32_ChecksumCalculator : public ChecksumCalculator
 {
+    const int minLen = 8;
     const quint32 CRC32Table[256] =
     {
         0x00000000, 0x77073096, 0xee0e612c, 0x990951ba,
@@ -123,7 +124,9 @@ private:
         f.close();
 
         crc32 ^= 0xffffffff;
-        return QString::number(crc32, 16).toUpper();
+        const QString crc32Hex = QString::number(crc32, 16).toUpper();
+        return crc32Hex.length() < minLen ? crc32Hex.rightJustified(minLen, '0')
+                                          : crc32Hex;
     }
 };
 

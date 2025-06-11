@@ -16,7 +16,7 @@
 #define SETTINGS_OPEN_REPORT    "open_report"
 
 #define MAJOR_VERSION 1
-#define MINOR_VERSION 1
+#define MINOR_VERSION 2
 
 
 MainWindow::MainWindow(QWidget *parent)
