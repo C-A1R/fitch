@@ -199,7 +199,7 @@ void MainWindow::slotScan()
             item->setTextAlignment(Qt::AlignCenter);
             item->setData(ROLE_DATE_TIME, dateTime);
             item->setText(dateTime.date().toString(QStringLiteral("dd.MM.yyyy"))
-                          + QStringLiteral("  ") + dateTime.time().toString(QStringLiteral("hh:mm:ss")));
+                          + QStringLiteral("  ") + dateTime.time().toString(QStringLiteral("hh:mm")));
             ui->tableWidget->setItem(row, COL_DATE_TIME, item);
         }
     }
@@ -283,7 +283,7 @@ void MainWindow::slotWriteXlsx()
     QXlsx::Format txtFormat;
     txtFormat.setNumberFormatIndex(49);
     QXlsx::Format dateTimeFormat;
-    dateTimeFormat.setNumberFormat(QStringLiteral("dd.MM.yyyy hh:mm:ss"));
+    dateTimeFormat.setNumberFormat(QStringLiteral("dd.MM.yyyy hh:mm"));
     for (int i = 0; i < ui->tableWidget->rowCount(); ++i)
     {
         const auto row = i + 2;
